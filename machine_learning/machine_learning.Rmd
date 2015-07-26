@@ -1,0 +1,96 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "Katarzyna Senderowska"
+date: "24.07.2015"
+output: html_document
+---
+
+
+### Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants was used. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The aim of the project is to predict the manner in which they did the exercise. 
+
+### Exploratory data analysis & data cleaning
+
+The data for this project comes from http://groupware.les.inf.puc-rio.br/har .
+
+Datasets were downloaded from the website and read into R:
+```{r}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "/home/kasia/pml-training.csv", method='curl')
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "/home/kasia/pml-testing.csv", method='curl')
+data_training <- read.csv("/home/kasia/pml-training.csv")
+data_test <- read.csv("/home/kasia/pml-testing.csv")
+```
+
+All necesarry packages were loaded:
+```{r, message = FALSE}
+library(caret)
+library(kernlab)
+library(randomForest)
+library(corrplot)
+```
+
+Both training and test datasets contain lost of missing values. They can generate a noise and disturbe machine learning model. Therefore the data was cleaned first by removing columns with NAs or empty values. 
+The first eight columns which are identifiers for the experiment were also removed. The same procedure was applied for traing and testing datasets.
+
+```{r}
+isAnyMissing <- sapply(data_training, function (x) any(is.na(x) | x == ""))
+data_training_removeNAs <- data_training[,which(isAnyMissing == FALSE)]
+data_training_variables <- data_training_removeNAs[8:length(data_training_removeNAs)]
+
+isAnyMissing2 <- sapply(data_test, function (x) any(is.na(x) | x == ""))
+data_test_removeNAs <- data_test[,which(isAnyMissing2 == FALSE)]
+data_test_variables <- data_test_removeNAs[8:length(data_test_removeNAs)]
+```
+
+### Machine Learning
+
+The training dataset was split into two parts: training and cross validation, in 70:30 ratio.
+
+```{r}
+inTrain <- createDataPartition(y = data_training_variables$classe, p = 0.7, list = FALSE)
+training <- data_training_variables[inTrain, ]
+crossval <- data_training_variables[-inTrain, ]
+```
+
+A random forest model was chosen to predict the classification. Random forests operate by constructing a multitude of decision trees and outputting the class of the individual trees. Random forests correct for decision trees' habit of overfitting to their training set, which  boosts the performance of the final model.
+
+A correllation plot was produced to check the correlations within each pair of variables.
+
+```{r}
+correlation <- cor(training[, -length(training)])
+corrplot(correlation, order = "FPC")
+```
+
+Highty correlated pairs of variables are marked in dark red (negative correlation coefficients) and dark blue (positive correlation coefficients). The plot shows that number of highly correlated pairs of variables is indeed very small. Therefore all predictors can be included in the model.
+
+In the next step, random forest model was fitted to the data. Classe variable was set as an outcome. All remaninig variables were used as predictors.
+
+```{r}
+model <- randomForest(classe ~ ., data = training)
+model
+```
+
+The model resulted in very small OOB error rate of 0.5%. This is good enought to go to next steps of testing the model.
+
+### Cross-validation and preditions on test data
+
+Random Forest model described above was used to classify the remaining 30% of data. In order to detemine the accuracy of the model, the obtained results were presented  in a confusion matrix and compared with the actual classifications.
+
+```{r}
+cross_validation <- predict(model, crossval)
+confusionMatrix(crossval$classe, cross_validation)
+```
+
+The accuracy of the prediction is very high: 99.5%. 
+
+In the final step , the obtained model was used to predict the classifications for test data.
+
+```{r}
+test_data_predictions <- predict(model, data_test_variables)
+test_data_predictions
+```
+
+### Summary
+
+The obtained results showed that Random Forest, relatively simple machine learning algorithm, performs very well for predicting activities from accelerometers measurements.
